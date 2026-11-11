@@ -1,0 +1,422 @@
+// One toast: pill with badge and title, and a body that grows out of it.
+
+import { Sileo, SileoItem, SileoKind, SileoPosition, SileoToast } from "store.slint";
+import { GooeyShape } from "shape.slint";
+
+global Tokens {
+    // The state colors of the original, converted from oklch to sRGB.
+    public pure function tone(kind: SileoKind) -> color {
+        kind == SileoKind.loading ? #737373
+            : kind == SileoKind.error ? #fb2c36
+            : kind == SileoKind.warning ? #f0b100
+            : kind == SileoKind.info ? #00a6f4
+            : kind == SileoKind.action ? #2b7fff
+            : #3ac530
+    }
+
+    public pure function title(toast: SileoToast) -> string {
+        toast.title != "" ? toast.title
+            : toast.kind == SileoKind.loading ? "Loading"
+            : toast.kind == SileoKind.error ? "Error"
+            : toast.kind == SileoKind.warning ? "Warning"
+            : toast.kind == SileoKind.info ? "Info"
+            : toast.kind == SileoKind.action ? "Action"
+            : "Success"
+    }
+}
+
+// The icons of the original (Lucide), 24 px grid drawn at 16 px.
+component KindIcon inherits Rectangle {
+    in property <SileoKind> kind;
+    in property <color> tone;
+    width: 16px;
+    height: 16px;
+
+    Path {
+        viewbox-width: 24;
+        viewbox-height: 24;
+        fill: transparent;
+        stroke: root.tone;
+        stroke-width: 1.33px;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        commands: root.kind == SileoKind.loading ? "M 21 12 A 9 9 0 1 1 14.781 3.44"
+            : root.kind == SileoKind.error ? "M 18 6 L 6 18 M 6 6 L 18 18"
+            : root.kind == SileoKind.warning ? "M 2 12 A 10 10 0 1 0 22 12 A 10 10 0 1 0 2 12 M 12 8 L 12 12 M 12 16 L 12.01 16"
+            : root.kind == SileoKind.info ? "M 2 12 A 10 10 0 1 0 22 12 A 10 10 0 1 0 2 12 M 8 12 A 4 4 0 1 0 16 12 A 4 4 0 1 0 8 12 M 4.93 4.93 L 9.17 9.17 M 14.83 9.17 L 19.07 4.93 M 14.83 14.83 L 19.07 19.07 M 9.17 14.83 L 4.93 19.07"
+            : root.kind == SileoKind.action ? "M 5 12 L 19 12 M 12 5 L 19 12 L 12 19"
+            : "M 20 6 L 9 17 L 4 12";
+        // One turn per second while loading. The tick is only read in that case.
+        transform-rotation: root.kind == SileoKind.loading ? mod(animation-tick() / 1ms, 1000) * 0.36deg : 0deg;
+    }
+}
+
+// Badge and title. Two of these are stacked so a new header can fade in over the old one.
+component HeaderLayer inherits Rectangle {
+    in property <SileoToast> toast;
+    in property <bool> active;
+    out property <length> content-width: 32px + label.preferred-width;
+    property <color> tone: Tokens.tone(toast.kind);
+
+    width: self.content-width;
+    height: 40px;
+    opacity: 0;
+
+    states [
+        shown when root.active: {
+            opacity: 1;
+            // The original blurs one header into the next. Without a blur two titles on
+            // top of each other are unreadable, so the old one leaves before the new one comes.
+            in {
+                animate opacity { delay: 150ms; duration: 300ms; easing: ease-out; }
+            }
+            out {
+                animate opacity { duration: 150ms; easing: ease; }
+            }
+        }
+    ]
+
+    Rectangle {
+        x: 0px;
+        y: 8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
+        background: root.tone.with-alpha(0.2);
+
+        if root.toast.icon.width > 0: Image {
+            width: 16px;
+            height: 16px;
+            source: root.toast.icon;
+        }
+        if root.toast.icon.width == 0: KindIcon {
+            kind: root.toast.kind;
+            tone: root.tone;
+        }
+    }
+
+    label := Text {
+        x: 32px;
+        y: (parent.height - self.height) / 2;
+        text: Tokens.title(root.toast);
+        color: root.tone;
+        font-size: 13.2px;
+        font-weight: 500;
+    }
+}
+
+export component ToastView inherits Rectangle {
+    in property <SileoItem> item;
+    // Already resolved, never `auto`.
+    in property <SileoPosition> position;
+    in property <color> default-fill;
+    in property <duration> default-duration;
+    in property <length> default-roundness;
+    // Space kept between this toast and the next one in the stack.
+    in property <length> gap;
+
+    property <string> id: item.toast.id;
+    property <int> instance: item.instance;
+    // Bottom positions: the pill sits at the bottom and the body grows upward.
+    property <bool> up: position == SileoPosition.bottom-left || position == SileoPosition.bottom-center || position == SileoPosition.bottom-right;
+    property <bool> at-left: position == SileoPosition.top-left || position == SileoPosition.bottom-left;
+    property <bool> at-right: position == SileoPosition.top-right || position == SileoPosition.bottom-right;
+
+    // What is on screen. Lags behind `item.toast` while the body collapses for a swap.
+    property <SileoToast> view;
+    property <SileoToast> header-a;
+    property <SileoToast> header-b;
+    property <bool> a-active: true;
+    property <bool> swapping;
+
+    property <bool> entered;
+    property <bool> expanded;
+    // Autopilot: 0 = waiting to expand, 1 = expanded, 2 = done.
+    property <int> phase;
+    property <length> drag;
+
+    property <bool> shown: entered && !item.exiting;
+    property <color> tone: Tokens.tone(view.kind);
+    property <color> fill: view.fill.alpha > 0 ? view.fill : default-fill;
+    property <color> on-fill: 0.299 * fill.red + 0.587 * fill.green + 0.114 * fill.blue > 140 ? #000000 : #ffffff;
+    property <length> roundness: view.roundness > 0 ? view.roundness : default-roundness;
+    property <duration> life: item.toast.duration > 0 ? item.toast.duration : default-duration;
+    property <bool> has-body: view.description != "" || view.button != "";
+    property <bool> loading: view.kind == SileoKind.loading;
+    // Only one toast is expanded at a time: the hovered one, else the latest one.
+    property <string> active-id: Sileo.hovered-id != "" ? Sileo.hovered-id : Sileo.latest-id;
+    property <bool> may-expand: !loading && (active-id == "" || active-id == id);
+    property <bool> open: has-body && expanded && !loading;
+    property <bool> must-collapse: item.exiting || !may-expand;
+    property <bool> armed: has-body && !must-collapse && !view.no-autopilot && !item.toast.persistent;
+
+    property <length> description-height: view.description != "" ? description.preferred-height : 0px;
+    property <length> content-height: 32px + description-height + (view.button != "" ? 40px : 0px);
+    property <length> body-target: max(50px, content-height);
+    property <length> body-height: 0px;
+    property <float> content-opacity: 0;
+    property <length> card-height: 40px + max(0px, body-height);
+    property <length> pill-width-target: max(40px, (a-active ? layer-a.content-width : layer-b.content-width) + 26px);
+    property <length> pill-width: pill-width-target;
+    property <length> pill-x: at-left ? 0px : at-right ? self.width - pill-width-target : (self.width - pill-width-target) / 2;
+    property <float> grow: shown ? 1 : 0;
+    property <length> slide: shown ? 0px : up ? 6px : -6px;
+
+    animate pill-width, pill-x { duration: 600ms; easing: spring(0.25); }
+    animate grow, slide { duration: 396ms; easing: spring(0.25); }
+
+    width: 350px;
+    // The slot in the stack. It grows from nothing so the other toasts make room smoothly.
+    height: max(0, grow) * (card-height + gap);
+    accessible-role: text;
+    accessible-label: Tokens.title(view) + (view.description != "" ? ". " + view.description : "");
+
+    states [
+        opened when root.open: {
+            body-height: root.body-target;
+            content-opacity: 1;
+            in {
+                animate body-height { duration: 600ms; easing: spring(0.25); }
+                animate content-opacity { delay: 180ms; duration: 360ms; easing: ease; }
+            }
+            out {
+                animate body-height { duration: 600ms; easing: spring(0); }
+                animate content-opacity { delay: 24ms; duration: 48ms; easing: ease; }
+            }
+        }
+    ]
+
+    function apply() {
+        if (item.toast.kind != view.kind || Tokens.title(item.toast) != Tokens.title(view)) {
+            if (a-active) {
+                header-b = item.toast;
+            } else {
+                header-a = item.toast;
+            }
+            a-active = !a-active;
+        } else if (a-active) {
+            header-a = item.toast;
+        } else {
+            header-b = item.toast;
+        }
+        view = item.toast;
+        phase = 0;
+    }
+
+    init => {
+        view = item.toast;
+        header-a = item.toast;
+    }
+
+    // Shown again with the same id: collapse first, then swap the content.
+    changed instance => {
+        dismiss-timer.restart();
+        if (open) {
+            expanded = false;
+            swapping = true;
+        } else {
+            apply();
+        }
+    }
+
+    changed must-collapse => {
+        if (must-collapse) {
+            expanded = false;
+        }
+    }
+
+    changed armed => {
+        phase = 0;
+    }
+
+    Timer {
+        interval: 16ms;
+        running: !root.entered;
+        triggered => {
+            root.entered = true;
+        }
+    }
+
+    Timer {
+        interval: 200ms;
+        running: root.swapping;
+        triggered => {
+            root.swapping = false;
+            root.apply();
+        }
+    }
+
+    Timer {
+        interval: min(root.life, 150ms);
+        running: root.armed && root.phase == 0;
+        triggered => {
+            root.expanded = true;
+            root.phase = 1;
+        }
+    }
+
+    Timer {
+        interval: max(1ms, min(root.life, 4s) - 150ms);
+        running: root.armed && root.phase == 1;
+        triggered => {
+            root.expanded = false;
+            root.phase = 2;
+        }
+    }
+
+    // Hovering any toast pauses all of them. The time starts over afterwards.
+    dismiss-timer := Timer {
+        interval: root.life;
+        running: root.entered && !root.item.exiting && !root.item.toast.persistent && Sileo.hovered-id == "";
+        triggered => {
+            Sileo.dismiss(root.id);
+        }
+    }
+
+    // Stays in place while the card follows the pointer, else the drag would feed back.
+    touch := TouchArea {
+        x: 0px;
+        y: root.up ? root.height - root.card-height : 0px;
+        width: root.width;
+        height: root.card-height;
+        enabled: !root.item.exiting;
+        mouse-cursor: root.loading ? MouseCursor.default : MouseCursor.pointer;
+
+        changed has-hover => {
+            if (self.has-hover) {
+                Sileo.hovered-id = root.id;
+                if (root.has-body) {
+                    root.expanded = true;
+                }
+            } else {
+                if (Sileo.hovered-id == root.id) {
+                    Sileo.hovered-id = "";
+                }
+                root.expanded = false;
+            }
+        }
+
+        // Swipe up or down to dismiss.
+        moved => {
+            if (self.pressed) {
+                root.drag = clamp(self.mouse-y - self.pressed-y, -20px, 20px);
+            }
+        }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.up) {
+                if (abs((self.mouse-y - self.pressed-y) / 1px) > 30) {
+                    Sileo.dismiss(root.id);
+                }
+                root.drag = 0px;
+            } else if (event.kind == PointerEventKind.cancel) {
+                root.drag = 0px;
+            }
+        }
+
+        // Nested so the toast stays hovered while the pointer is on the button.
+        button-touch := TouchArea {
+            x: 16px;
+            y: (root.up ? 0px : 40px) + 28px + root.description-height;
+            width: parent.width - 32px;
+            height: 28px;
+            enabled: root.open && root.view.button != "";
+            mouse-cursor: MouseCursor.pointer;
+            clicked => {
+                Sileo.button-clicked(root.id);
+            }
+        }
+    }
+
+    card := Rectangle {
+        x: 0px;
+        y: touch.y + root.slide + root.drag;
+        width: root.width;
+        height: root.card-height;
+        opacity: root.shown ? 1 : 0;
+        transform-scale-x: root.shown ? 100% : 95%;
+        transform-scale-y: self.transform-scale-x;
+        animate opacity, transform-scale-x { duration: 396ms; easing: spring(0.25); }
+
+        GooeyShape {
+            width: parent.width;
+            height: parent.height;
+            fill: root.fill;
+            pill-x: root.pill-x;
+            pill-width: root.pill-width;
+            body-height: root.body-height;
+            roundness: root.roundness;
+            join-left: !root.at-left;
+            join-right: !root.at-right;
+            flip: root.up;
+        }
+
+        Rectangle {
+            x: 0px;
+            y: root.up ? 0px : 40px;
+            width: parent.width;
+            height: max(0px, root.body-height);
+            clip: true;
+            opacity: root.content-opacity;
+
+            description := Text {
+                x: 16px;
+                y: 16px;
+                width: parent.width - 32px;
+                text: root.view.description;
+                wrap: word-wrap;
+                color: root.on-fill.with-alpha(0.5);
+                font-size: 14px;
+            }
+
+            if root.view.button != "": Rectangle {
+                x: button-touch.x;
+                y: 28px + root.description-height;
+                width: button-touch.width;
+                height: button-touch.height;
+                border-radius: self.height / 2;
+                background: root.tone.with-alpha(button-touch.has-hover ? 0.25 : 0.15);
+                animate background { duration: 150ms; easing: ease; }
+
+                Text {
+                    text: root.view.button;
+                    color: root.tone;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
+            }
+        }
+
+        // Clipped to the pill, so a longer title is revealed as the pill widens.
+        Rectangle {
+            x: root.pill-x;
+            y: root.up ? parent.height - 40px : 0px;
+            width: root.pill-width;
+            height: 40px;
+            clip: true;
+
+            Rectangle {
+                x: 0px;
+                y: root.open ? root.up ? -3px : 3px : 0px;
+                width: parent.width;
+                height: parent.height;
+                transform-scale-x: root.open ? 90% : 100%;
+                transform-scale-y: self.transform-scale-x;
+                animate y, transform-scale-x { duration: 600ms; easing: spring(0.25); }
+
+                layer-a := HeaderLayer {
+                    x: 8px;
+                    y: 0px;
+                    toast: root.header-a;
+                    active: root.a-active;
+                }
+
+                layer-b := HeaderLayer {
+                    x: 8px;
+                    y: 0px;
+                    toast: root.header-b;
+                    active: !root.a-active;
+                }
+            }
+        }
+    }
+}

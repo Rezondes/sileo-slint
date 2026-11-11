@@ -1,0 +1,144 @@
+// sileo-slint: a physics-based toast for Slint. Port of https://github.com/hiaaryan/sileo
+//
+// Put one `Toaster` over your window content and call `Sileo.show(...)`.
+
+import { Palette } from "std-widgets.slint";
+import { Sileo, SileoItem, SileoKind, SileoPosition, SileoTheme, SileoToast } from "store.slint";
+import { ToastView } from "toast.slint";
+
+export { Sileo, SileoItem, SileoKind, SileoPosition, SileoTheme, SileoToast }
+
+// The stack of one screen position.
+component Viewport inherits Rectangle {
+    in property <SileoPosition> slot;
+    // Where toasts without a position of their own go.
+    in property <SileoPosition> fallback;
+    in property <[SileoItem]> items;
+    in property <color> fill;
+    in property <duration> duration;
+    in property <length> roundness;
+    in property <length> gap;
+    in property <bool> bottom;
+
+    width: 350px;
+
+    VerticalLayout {
+        alignment: root.bottom ? end : start;
+
+        // Every viewport walks the whole list and only fills the rows that belong to it.
+        for item in root.items: VerticalLayout {
+            if (item.toast.position == SileoPosition.auto ? root.fallback : item.toast.position) == root.slot: ToastView {
+                item: item;
+                position: root.slot;
+                default-fill: root.fill;
+                default-duration: root.duration;
+                default-roundness: root.roundness;
+                gap: root.gap;
+            }
+        }
+    }
+}
+
+// Fills its parent and lets clicks through everywhere but on a toast.
+// Place it last in your window so it is drawn on top.
+export component Toaster inherits Rectangle {
+    // Where toasts without a position of their own appear.
+    in property <SileoPosition> position: SileoPosition.top-right;
+    // `light` is a dark toast for light apps, `dark` a light toast for dark apps.
+    in property <SileoTheme> theme: SileoTheme.system;
+    // How long a toast stays.
+    in property <duration> duration: 6s;
+    in property <length> roundness: 16px;
+    // Distance to the edges of the Toaster.
+    in property <length> offset: 12px;
+    // Distance between stacked toasts.
+    in property <length> gap: 12px;
+
+    property <bool> dark: theme == SileoTheme.dark || (theme == SileoTheme.system && Palette.color-scheme == ColorScheme.dark);
+    property <color> fill: dark ? #f2f2f2 : #1a1a1a;
+    property <SileoPosition> fallback: position == SileoPosition.auto ? SileoPosition.top-right : position;
+    property <length> inner-height: self.height - 2 * offset;
+
+    // Top stacks show the newest toast first, bottom stacks show it last:
+    // the newest toast is always the one next to the edge.
+    Viewport {
+        x: root.offset;
+        y: root.offset;
+        height: root.inner-height;
+        slot: SileoPosition.top-left;
+        items: Sileo.items-reversed;
+        fallback: root.fallback;
+        fill: root.fill;
+        duration: root.duration;
+        roundness: root.roundness;
+        gap: root.gap;
+    }
+
+    Viewport {
+        x: (parent.width - self.width) / 2;
+        y: root.offset;
+        height: root.inner-height;
+        slot: SileoPosition.top-center;
+        items: Sileo.items-reversed;
+        fallback: root.fallback;
+        fill: root.fill;
+        duration: root.duration;
+        roundness: root.roundness;
+        gap: root.gap;
+    }
+
+    Viewport {
+        x: parent.width - self.width - root.offset;
+        y: root.offset;
+        height: root.inner-height;
+        slot: SileoPosition.top-right;
+        items: Sileo.items-reversed;
+        fallback: root.fallback;
+        fill: root.fill;
+        duration: root.duration;
+        roundness: root.roundness;
+        gap: root.gap;
+    }
+
+    Viewport {
+        x: root.offset;
+        y: root.offset;
+        height: root.inner-height;
+        slot: SileoPosition.bottom-left;
+        bottom: true;
+        items: Sileo.items;
+        fallback: root.fallback;
+        fill: root.fill;
+        duration: root.duration;
+        roundness: root.roundness;
+        gap: root.gap;
+    }
+
+    Viewport {
+        x: (parent.width - self.width) / 2;
+        y: root.offset;
+        height: root.inner-height;
+        slot: SileoPosition.bottom-center;
+        bottom: true;
+        items: Sileo.items;
+        fallback: root.fallback;
+        fill: root.fill;
+        duration: root.duration;
+        roundness: root.roundness;
+        gap: root.gap;
+    }
+
+    Viewport {
+        x: parent.width - self.width - root.offset;
+        y: root.offset;
+        height: root.inner-height;
+        slot: SileoPosition.bottom-right;
+        bottom: true;
+        items: Sileo.items;
+        fallback: root.fallback;
+        fill: root.fill;
+        duration: root.duration;
+        roundness: root.roundness;
+        gap: root.gap;
+    }
+}

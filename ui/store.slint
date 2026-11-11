@@ -1,0 +1,82 @@
+// Types and the global that holds the toast list.
+
+export enum SileoKind { success, loading, error, warning, info, action }
+
+// `auto` means: the position of the Toaster, or the position this toast already has.
+export enum SileoPosition { auto, top-left, top-center, top-right, bottom-left, bottom-center, bottom-right }
+
+export enum SileoTheme { system, light, dark }
+
+// One toast. Every field is optional, a zero value means "use the default".
+export struct SileoToast {
+    // Showing a toast with the id of a visible toast morphs that toast instead of adding one.
+    // Empty means "sileo-default", so by default there is a single toast that morphs.
+    id: string,
+    // Empty means the name of the kind.
+    title: string,
+    // The toast only expands if it has a description or a button.
+    description: string,
+    kind: SileoKind,
+    position: SileoPosition,
+    // 0 means the duration of the Toaster.
+    duration: duration,
+    // Stays until dismissed. Use it for loading toasts.
+    persistent: bool,
+    // Replaces the icon of the kind.
+    icon: image,
+    // Transparent means the fill of the Toaster theme.
+    fill: color,
+    // 0 means the roundness of the Toaster.
+    roundness: length,
+    // By default a toast expands shortly after it appears and collapses again
+    // before it goes away. Set this to expand on hover only.
+    no-autopilot: bool,
+    // Title of the button inside the expanded body. Empty means no button.
+    button: string,
+}
+
+// A row of the toast list. Written by `sileo_slint::init!`, read by the Toaster.
+export struct SileoItem {
+    toast: SileoToast,
+    // Changes every time the toast is shown again.
+    instance: int,
+    exiting: bool,
+}
+
+export global Sileo {
+    // Shows a toast and returns its id.
+    callback show(toast: SileoToast) -> string;
+    // Plays the exit animation of the toast with this id, then removes it.
+    callback dismiss(id: string);
+    // Removes all toasts at once.
+    callback clear();
+    // The button of the toast with this id was clicked.
+    callback button-clicked(id: string);
+
+    public function success(title: string, description: string) -> string {
+        show({ title: title, description: description, kind: SileoKind.success })
+    }
+
+    public function error(title: string, description: string) -> string {
+        show({ title: title, description: description, kind: SileoKind.error })
+    }
+
+    public function warning(title: string, description: string) -> string {
+        show({ title: title, description: description, kind: SileoKind.warning })
+    }
+
+    public function info(title: string, description: string) -> string {
+        show({ title: title, description: description, kind: SileoKind.info })
+    }
+
+    // A loading toast stays until it is dismissed or shown again with another kind.
+    public function loading(title: string) -> string {
+        show({ title: title, kind: SileoKind.loading, persistent: true })
+    }
+
+    // Internal state, managed by `sileo_slint::init!` and the Toaster.
+    in property <[SileoItem]> items;
+    in property <[SileoItem]> items-reversed;
+    in property <string> latest-id;
+    in-out property <string> hovered-id;
+}

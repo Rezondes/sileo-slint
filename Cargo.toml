@@ -1,0 +1,20 @@
+[package]
+name = "sileo-slint"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+description = "A physics-based toast component for Slint. Port of Sileo."
+license = "MIT"
+repository = "https://github.com/Rezondes/sileo-slint"
+readme = "README.md"
+keywords = ["slint", "toast", "notification", "gui", "ui"]
+categories = ["gui"]
+include = ["/src", "/ui", "/README.md", "/CHANGELOG.md", "/LICENSE"]
+
+# No dependencies on purpose: the crate is also used as a build dependency.
+
+[dev-dependencies]
+slint = "1.18"
+i-slint-backend-testing = "1.18"
+# Only for the frame dump of the demo.
+image = { version = "0.25", default-features = false, features = ["png"] }

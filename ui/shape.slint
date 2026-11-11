@@ -1,0 +1,88 @@
+// Pill and body as one outline. Stands in for the SVG gooey filter of the original:
+// Slint has no blur plus alpha threshold, so the fillet between pill and body is drawn.
+//
+// The element is as tall as the toast. The pill sits on top, the body below it over the
+// full width. With `flip` the pill sits at the bottom and the body grows upward.
+// A side where the pill touches the edge is flush, a side where the body sticks out
+// past the pill is a join and gets a fillet.
+//
+// The body comes out of the pill in two steps. First the pill just gets taller, then
+// the body widens to the full width. The original fades the body in instead. Here a
+// flat full-width body would show as a line, most of all in the long tail of the
+// closing spring.
+export component GooeyShape inherits Path {
+    in property <length> pill-x;
+    in property <length> pill-width;
+    in property <length> pill-height: 40px;
+    in property <length> body-height;
+    in property <length> roundness: 16px;
+    in property <bool> join-left;
+    in property <bool> join-right;
+    in property <bool> flip;
+
+    // Everything below is in logical px without unit.
+    property <float> w: self.width / 1px;
+    property <float> vh: self.height / 1px;
+    property <float> h: pill-height / 1px;
+    property <float> r: min(max(0, roundness / 1px), h / 2);
+    // Radius of the concave corner between pill and body.
+    property <float> fillet: r * 0.75;
+    // Circle-as-cubic constant.
+    property <float> k: 0.5523;
+    property <float> bh: max(0, body-height / 1px);
+    property <float> xl: pill-x / 1px;
+    property <float> xr: (pill-x + pill-width) / 1px;
+    // 0 = body as wide as the pill, 1 = full width. Starts once the pill is `r` taller.
+    property <float> s: r > 0 ? clamp((bh - r) / (2 * r), 0, 1) : 1;
+    property <float> bl: join-left ? xl * (1 - s * s) : 0;
+    property <float> br: join-right ? xr + (w - xr) * s * s : w;
+    property <float> gl: max(0, xl - bl);
+    property <float> gr: max(0, br - xr);
+    property <float> fl: min(fillet, gl / 2);
+    property <float> fr: min(fillet, gr / 2);
+    // Body corner radii on a join side: top, then bottom. With no gap the top radius is 0
+    // and the bottom radius is `r`, which is exactly the taller pill of the first step.
+    property <float> rtl: min(r, min(bh / 2, gl / 2));
+    property <float> rtr: min(r, min(bh / 2, gr / 2));
+    property <float> rbl: min(r, bh - rtl);
+    property <float> rbr: min(r, bh - rtr);
+    property <string> arc: flip ? " 0 0 0 " : " 0 0 1 ";
+
+    pure function p(x: float, y: float) -> string {
+        x + " " + (flip ? vh - y : y)
+    }
+
+    property <string> right-side: join-right
+        ? "L " + p(xr, h - r)
+            + " C " + p(xr, h - (1 - k) * fr) + " " + p(xr + (1 - k) * fr, h) + " " + p(xr + fr, h)
+            + " L " + p(br - rtr, h)
+            + " A " + rtr + " " + rtr + arc + p(br, h + rtr)
+            + " L " + p(br, h + bh - rbr)
+            + " A " + rbr + " " + rbr + arc + p(br - rbr, h + bh)
+        : "L " + p(w, h + bh - r)
+            + " A " + r + " " + r + arc + p(w - r, h + bh);
+
+    property <string> left-side: join-left
+        ? "L " + p(bl + rbl, h + bh)
+            + " A " + rbl + " " + rbl + arc + p(bl, h + bh - rbl)
+            + " L " + p(bl, h + rtl)
+            + " A " + rtl + " " + rtl + arc + p(bl + rtl, h)
+            + " L " + p(xl - fl, h)
+            + " C " + p(xl - (1 - k) * fl, h) + " " + p(xl, h - (1 - k) * fl) + " " + p(xl, h - r)
+        : "L " + p(r, h + bh)
+            + " A " + r + " " + r + arc + p(0, h + bh - r);
+
+    // First step: a pill that is `bh` taller.
+    property <string> tall-pill: "L " + p(xr, h + bh - r)
+        + " A " + r + " " + r + arc + p(xr - r, h + bh)
+        + " L " + p(xl + r, h + bh)
+        + " A " + r + " " + r + arc + p(xl, h + bh - r);
+
+    commands: "M " + p(xl + r, 0) + " L " + p(xr - r, 0)
+        + " A " + r + " " + r + arc + p(xr, r)
+        + " " + (bh < r ? tall-pill : right-side + " " + left-side)
+        + " L " + p(xl, r)
+        + " A " + r + " " + r + arc + p(xl + r, 0) + " Z";
+    viewbox-width: w;
+    viewbox-height: vh;
+}
