@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sileo-slint</title>
+<meta name="description" content="A physics-based toast component for Slint, with a Rust API. Port of Sileo.">
+<style>
+  :root {
+    --bg: #141414;
+    --surface: #1d1d1d;
+    --line: #2a2a2a;
+    --text: #ededed;
+    --muted: #a3a3a3;
+    --accent: #3ac530;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 16px 80px; }
+  h1 { font-size: clamp(2rem, 6vw, 3rem); line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.25rem; margin: 56px 0 12px; }
+  p { margin: 0 0 12px; color: var(--muted); max-width: 62ch; }
+  a { color: var(--accent); }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .links a {
+    padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--text); text-decoration: none; font-size: 14px;
+  }
+  .links a:hover, .links a:focus-visible { border-color: var(--accent); }
+  .stage {
+    position: relative; margin-top: 32px; border: 1px solid var(--line);
+    border-radius: 16px; overflow: hidden; background: var(--surface);
+  }
+  /* The demo reads this width once at start and sets the canvas size itself. */
+  #canvas { display: block; width: 100%; height: 560px; margin: 0 auto; outline: none; }
+  #status {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--muted); font-size: 14px; pointer-events: none;
+  }
+  .hint { font-size: 14px; margin-top: 8px; }
+  pre {
+    margin: 0 0 16px; padding: 16px; overflow-x: auto; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 12px; font: 14px/1.5 var(--mono);
+  }
+  code { font-family: var(--mono); }
+  .file { font: 13px var(--mono); color: var(--muted); margin: 20px 0 6px; }
+  footer { margin-top: 64px; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>sileo-slint</h1>
+  <p>A physics-based toast component for <a href="https://slint.dev">Slint</a>, with a Rust API.
+     A toast is a small pill. When it has more to say, a body grows out of it with a spring.
+     Port of <a href="https://github.com/hiaaryan/sileo">Sileo</a> for React.</p>
+  <div class="links">
+    <a href="https://github.com/Rezondes/sileo-slint">GitHub</a>
+    <a href="https://crates.io/crates/sileo-slint">crates.io</a>
+    <a href="https://docs.rs/sileo-slint">docs.rs</a>
+  </div>
+
+  <h2>Playground</h2>
+  <p>This is the real component, compiled to WebAssembly. Hover a toast to expand it, swipe it up or down to dismiss it.</p>
+  <div class="stage">
+    <canvas id="canvas" tabindex="0" aria-label="Interactive sileo-slint demo"></canvas>
+    <div id="status">Loading the playground…</div>
+  </div>
+
+  <h2>Install</h2>
+  <p>Needs Slint 1.18 or newer. Your code and your build script both use the crate.</p>
+  <pre><code>cargo add slint sileo-slint
+cargo add --build slint-build sileo-slint</code></pre>
+
+  <div class="file">build.rs</div>
+  <pre><code>fn main() {
+    let config = slint_build::CompilerConfiguration::new()
+        .with_library_paths(sileo_slint::library_paths());
+    slint_build::compile_with_config("ui/app.slint", config).unwrap();
+}</code></pre>
+
+  <div class="file">ui/app.slint</div>
+  <pre><code>import { Sileo, SileoItem, SileoKind, SileoPosition, SileoToast, Toaster } from "@sileo";
+export { Sileo, SileoItem, SileoKind, SileoPosition, SileoToast }
+
+export component App inherits Window {
+    // your content first, the Toaster last so it is drawn on top
+    Toaster { }
+}</code></pre>
+
+  <div class="file">src/main.rs</div>
+  <pre><code>slint::include_modules!();
+
+fn main() -> Result&lt;(), slint::PlatformError&gt; {
+    let ui = App::new()?;
+    sileo_slint::init!(ui);
+    ui.global::&lt;Sileo&gt;().invoke_success("Saved".into(), "Your changes are stored.".into());
+    ui.run()
+}</code></pre>
+  <p>The full reference is in the <a href="https://github.com/Rezondes/sileo-slint#readme">README</a>.</p>
+
+  <footer>MIT licensed. Design and behaviour from <a href="https://github.com/hiaaryan/sileo">Sileo</a> by Aaryan.</footer>
+</main>
+<script type="module">
+  const status = document.getElementById("status");
+  try {
+    const { default: init } = await import("./pkg/demo.js");
+    await init();
+    status.remove();
+  } catch (e) {
+    // Slint leaves its event loop with an exception on the web. That one is not an error.
+    if (String(e).includes("Using exceptions for control flow")) status.remove();
+    else { status.textContent = "The playground could not start in this browser."; console.error(e); }
+  }
+</script>
+</body>
+</html>
