@@ -18,3 +18,7 @@ slint = "1.18"
 i-slint-backend-testing = "1.18"
 # Only for the frame dump of the demo.
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Only for the web build of the demo: it sizes the window to the page.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+web-sys = { version = "0.3", features = ["Window", "Document", "Element"] }

@@ -44,78 +44,77 @@ slint::slint! {
             }
         }
 
+        // Three columns, so the playground also fits a phone.
         VerticalBox {
             alignment: center;
-            spacing: 20px;
-
-            Text {
-                text: "sileo-slint";
-                font-size: 28px;
-                font-weight: 600;
-                horizontal-alignment: center;
-            }
-
-            HorizontalBox {
-                alignment: center;
-                Button {
-                    text: "Success";
-                    clicked => { Sileo.success("Changes saved", "Your changes are stored and synced."); }
-                }
-                Button {
-                    text: "Error";
-                    clicked => { Sileo.error("Upload failed", "The server did not answer. Check your connection and try again."); }
-                }
-                Button {
-                    text: "Warning";
-                    clicked => { Sileo.warning("Storage almost full", "You have used 95 % of your space."); }
-                }
-                Button {
-                    text: "Info";
-                    clicked => { Sileo.info("New version", ""); }
-                }
-                Button {
-                    text: "Action";
-                    clicked => {
-                        Sileo.show({
-                            title: "Update available",
-                            description: "Version 2.4 is ready to install.",
-                            kind: SileoKind.action,
-                            button: "Install now",
-                        });
-                    }
-                }
-                Button {
-                    text: "Loading";
-                    clicked => {
-                        Sileo.loading("Uploading");
-                        root.uploading = true;
-                    }
-                }
-            }
-
-            HorizontalBox {
-                alignment: center;
-                Button {
-                    text: "Second toast";
-                    clicked => { Sileo.show({ id: "second", title: "Another one", description: "Toasts with their own id stack.", kind: SileoKind.info }); }
-                }
-                Button {
-                    text: "Dismiss";
-                    clicked => { Sileo.dismiss("sileo-default"); }
-                }
-                Button {
-                    text: "Clear";
-                    clicked => { Sileo.clear(); }
-                }
-                Switch {
-                    text: "Dark mode";
-                    checked: Palette.color-scheme == ColorScheme.dark;
-                    toggled => { root.set-dark-mode(self.checked); }
-                }
-            }
+            spacing: 16px;
 
             GridLayout {
                 spacing: 8px;
+                Row {
+                    Rectangle { }
+                    Button {
+                        text: "Success";
+                        clicked => { Sileo.success("Changes saved", "Your changes are stored and synced."); }
+                    }
+                    Button {
+                        text: "Error";
+                        clicked => { Sileo.error("Upload failed", "The server did not answer. Check your connection and try again."); }
+                    }
+                    Button {
+                        text: "Warning";
+                        clicked => { Sileo.warning("Storage almost full", "You have used 95 % of your space."); }
+                    }
+                    Rectangle { }
+                }
+                Row {
+                    Rectangle { }
+                    Button {
+                        text: "Info";
+                        clicked => { Sileo.info("New version", ""); }
+                    }
+                    Button {
+                        text: "Action";
+                        clicked => {
+                            Sileo.show({
+                                title: "Update available",
+                                description: "Version 2.4 is ready to install.",
+                                kind: SileoKind.action,
+                                button: "Install now",
+                            });
+                        }
+                    }
+                    Button {
+                        text: "Loading";
+                        clicked => {
+                            Sileo.loading("Uploading");
+                            root.uploading = true;
+                        }
+                    }
+                    Rectangle { }
+                }
+                Row {
+                    Rectangle { height: 8px; }
+                }
+                Row {
+                    Rectangle { }
+                    Button {
+                        text: "Second toast";
+                        clicked => { Sileo.show({ id: "second", title: "Another one", description: "Toasts with their own id stack.", kind: SileoKind.info }); }
+                    }
+                    Button {
+                        text: "Dismiss";
+                        clicked => { Sileo.dismiss("sileo-default"); }
+                    }
+                    Button {
+                        text: "Clear";
+                        clicked => { Sileo.clear(); }
+                    }
+                    Rectangle { }
+                }
+                Row {
+                    Rectangle { height: 8px; }
+                }
                 Row {
                     Rectangle { }
                     PositionButton { text: "Top left"; value: SileoPosition.top-left; current <=> root.position; }
@@ -129,6 +128,15 @@ slint::slint! {
                     PositionButton { text: "Bottom center"; value: SileoPosition.bottom-center; current <=> root.position; }
                     PositionButton { text: "Bottom right"; value: SileoPosition.bottom-right; current <=> root.position; }
                     Rectangle { }
+                }
+            }
+
+            HorizontalBox {
+                alignment: center;
+                Switch {
+                    text: "Dark mode";
+                    checked: Palette.color-scheme == ColorScheme.dark;
+                    toggled => { root.set-dark-mode(self.checked); }
                 }
             }
         }
@@ -172,6 +180,18 @@ fn pointer(ui: &Demo, kind: Pointer, x: f32, y: f32) {
 fn main() -> Result<(), slint::PlatformError> {
     let ui = Demo::new()?;
     sileo_slint::init!(ui);
+
+    // On the web, Slint would size the canvas to the preferred 820 px. Take the width the
+    // page gives the canvas instead, so the playground fits a phone.
+    #[cfg(target_arch = "wasm32")]
+    if let Some(canvas) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id("canvas"))
+    {
+        let width = canvas.client_width().clamp(346, 820);
+        ui.window()
+            .set_size(slint::LogicalSize::new(width as f32, 560.0));
+    }
 
     ui.global::<Sileo>().on_button_clicked({
         let weak = ui.as_weak();

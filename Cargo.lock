@@ -3838,6 +3838,7 @@ dependencies = [
  "i-slint-backend-testing",
  "image",
  "slint",
+ "web-sys",
 ]
 
 [[package]]

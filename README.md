@@ -3,6 +3,8 @@
 A physics-based toast component for [Slint](https://slint.dev), with a Rust API.
 Port of [Sileo](https://github.com/hiaaryan/sileo) for React.
 
+**[Try it in the browser](https://rezondes.github.io/sileo-slint/)**
+
 ![An expanded action toast in the demo](docs/demo.png)
 
 A toast is a small pill. When it has something more to say, a body grows out of the pill
@@ -190,6 +192,10 @@ cargo run --example demo
 `cargo run --example demo -- <dir>` walks through all states on its own, clicks, hovers
 and swipes with synthetic pointer events, and writes frames as PNG into `<dir>`. Use it to
 check a change to the toast by eye.
+
+The same demo runs on the [showcase page](https://rezondes.github.io/sileo-slint/), built
+from [`site`](site) as WebAssembly. Every push to `main` rebuilds it and pushes it to the
+`pages` branch, which GitHub Pages serves.
 
 ## Without Rust
 

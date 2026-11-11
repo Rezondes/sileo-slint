@@ -1,0 +1,40 @@
+name: Pages
+
+# Builds the showcase with the demo as WebAssembly and pushes it to the `pages` branch.
+# GitHub Pages serves that branch.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # The CLI must match the wasm-bindgen version in Cargo.lock.
+      - id: bindgen
+        run: echo "version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.bindgen.outputs.version }}
+      - run: cargo build --example demo --target wasm32-unknown-unknown --release
+      - run: wasm-bindgen --target web --no-typescript --out-dir site/pkg target/wasm32-unknown-unknown/release/examples/demo.wasm
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: pages
+          publish_dir: site
+          force_orphan: true
